@@ -39,37 +39,117 @@
 			display: none;
 			align-items: center;
 			justify-content: center;
-			background: rgba(0, 0, 0, 0.6);
+			background: 
+				radial-gradient(circle at center, 
+					rgba(0, 0, 0, 0.3) 0%, 
+					rgba(0, 0, 0, 0.7) 50%, 
+					rgba(0, 0, 0, 0.9) 100%),
+				linear-gradient(135deg, 
+					rgba(0, 255, 255, 0.05) 0%, 
+					rgba(0, 128, 255, 0.03) 50%, 
+					rgba(200, 100, 255, 0.05) 100%);
 			z-index: 3;
+			backdrop-filter: blur(8px);
 		}
 
 		.overlay.show { display: flex; }
 
 		.panel {
-			background: #111;
-			border: 1px solid #333;
-			padding: 20px 24px;
-			border-radius: 12px;
+			background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+			border: 2px solid;
+			border-image: linear-gradient(45deg, #00ffff, #0080ff, #c864ff) 1;
+			padding: 24px 28px;
+			border-radius: 16px;
 			text-align: center;
-			box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+			box-shadow: 
+				0 20px 40px rgba(0,0,0,0.8),
+				0 0 0 1px rgba(0,255,255,0.1),
+				inset 0 1px 0 rgba(255,255,255,0.1);
+			position: relative;
+			overflow: hidden;
 		}
 
-		.panel h2 { margin: 0 0 10px; font-weight: 700; }
-		.panel p { margin: 0 0 16px; opacity: 0.9; }
+		.panel::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: linear-gradient(135deg, 
+				rgba(0,255,255,0.05) 0%, 
+				rgba(0,128,255,0.03) 50%, 
+				rgba(200,100,255,0.05) 100%);
+			pointer-events: none;
+		}
+
+		.panel h2 { 
+			margin: 0 0 16px; 
+			font-weight: 800; 
+			font-size: 28px;
+			background: linear-gradient(45deg, #00ffff, #0080ff, #c864ff);
+			-webkit-background-clip: text;
+			-webkit-text-fill-color: transparent;
+			background-clip: text;
+			text-shadow: 0 0 20px rgba(0,255,255,0.5);
+			position: relative;
+			z-index: 1;
+		}
+
+		.panel p { 
+			margin: 0 0 20px; 
+			opacity: 0.95; 
+			font-size: 16px;
+			color: #e0e0e0;
+			text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+			position: relative;
+			z-index: 1;
+		}
 
 		button {
-			background: linear-gradient(180deg, #2aa776, #1f7d59);
+			background: linear-gradient(135deg, #2aa776 0%, #1f7d59 50%, #12513a 100%);
 			border: 0;
 			color: #fff;
-			padding: 10px 16px;
-			border-radius: 8px;
+			padding: 12px 20px;
+			border-radius: 12px;
 			cursor: pointer;
 			font-size: 16px;
-			box-shadow: 0 2px 0 #12513a;
+			font-weight: 600;
+			box-shadow: 
+				0 4px 0 #0d3d2a,
+				0 8px 20px rgba(0,0,0,0.3),
+				inset 0 1px 0 rgba(255,255,255,0.2);
+			transition: all 0.2s ease;
+			position: relative;
+			z-index: 1;
 		}
 
-		button:hover { filter: brightness(1.1); }
-		button:active { transform: translateY(1px); box-shadow: 0 1px 0 #12513a; }
+		button:hover { 
+			filter: brightness(1.1); 
+			transform: translateY(-2px);
+			box-shadow: 
+				0 6px 0 #0d3d2a,
+				0 12px 25px rgba(0,0,0,0.4),
+				inset 0 1px 0 rgba(255,255,255,0.2);
+		}
+		
+		button:active { 
+			transform: translateY(0px); 
+			box-shadow: 
+				0 2px 0 #0d3d2a,
+				0 4px 15px rgba(0,0,0,0.3),
+				inset 0 1px 0 rgba(255,255,255,0.2);
+		}
+
+		.controls-info {
+			margin-top: 12px;
+			opacity: 0.8;
+			font-size: 13px;
+			color: #b0b0b0;
+			text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+			position: relative;
+			z-index: 1;
+		}
 	</style>
 </head>
 <body>
@@ -79,14 +159,14 @@
 			<h2>Game Over</h2>
 			<p id="scoreText"></p>
 			<button id="restartBtn" type="button">Restart</button>
-			<div style="margin-top:8px; opacity:0.8; font-size:12px;">WASD/Arrows to move • Shift to sprint</div>
+			<div class="controls-info">WASD/Arrows to move • Shift to sprint</div>
 		</div>
 	</div>
 	<div class="overlay" id="pauseOverlay">
 		<div class="panel">
 			<h2>Paused</h2>
 			<button id="resumeBtn" type="button">Resume</button>
-			<div style="margin-top:8px; opacity:0.8; font-size:12px;">Press Esc or P to resume</div>
+			<div class="controls-info">Press Esc or P to resume</div>
 		</div>
 	</div>
 
@@ -245,6 +325,15 @@
 			});
 		}
 
+		// Bullet lifetime management
+		function createBullet(x, y, vx, vy, r, hue, canGraze = true) {
+			return {
+				x, y, vx, vy, r, hue, canGraze,
+				age: 0,
+				maxLife: 8.0 // Bullets disappear after 8 seconds regardless of position
+			};
+		}
+
 		function initStars() {
 			stars.length = 0;
 			const area = cssWidth * cssHeight;
@@ -315,7 +404,12 @@
 				default:
 					x = Math.random() * cssWidth; y = cssHeight - margin; vy = -(50 + Math.random() * 60); vx = (Math.random() * 2 - 1) * 40; break; // bottom
 			}
-			const enemy = { x, y, vx, vy, w: 40, h: 40, radius: 24, hue: Math.random() * 360, shootTimer: 0, shootCd: 0.85 + Math.random() * 0.55 };
+			const enemy = { 
+				x, y, vx, vy, w: 40, h: 40, radius: 24, hue: Math.random() * 360, 
+				shootTimer: 0, shootCd: 0.85 + Math.random() * 0.55,
+				age: 0,
+				maxLife: 5.0 // Enemies disappear after 5 seconds
+			};
 			enemies.push(enemy);
 			playSpawn();
 		}
@@ -330,7 +424,7 @@
 				globalSpiralAngle += 0.32;
 				for (let i = 0; i < 6; i++) {
 					const angle = globalSpiralAngle + i * (Math.PI * 2 / 6);
-					bullets.push({ x: enemy.x, y: enemy.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r: 6, hue: (angle * 180 / Math.PI) % 360, canGraze: true });
+					bullets.push(createBullet(enemy.x, enemy.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 6, (angle * 180 / Math.PI) % 360));
 				}
 				// Aimed 3-shot burst
 				const dx = player.x - enemy.x, dy = player.y - enemy.y;
@@ -338,7 +432,7 @@
 				const spread = 0.38;
 				for (let j = -1; j <= 1; j++) {
 					const a = base + j * spread;
-					bullets.push({ x: enemy.x, y: enemy.y, vx: Math.cos(a) * (speed + 50), vy: Math.sin(a) * (speed + 50), r: 5, hue: 200, canGraze: true });
+					bullets.push(createBullet(enemy.x, enemy.y, Math.cos(a) * (speed + 50), Math.sin(a) * (speed + 50), 5, 200));
 				}
 			}
 		}
@@ -377,8 +471,13 @@
 			// Enemies
 			for (let i = enemies.length - 1; i >= 0; i--) {
 				const e = enemies[i];
+				e.age += dt;
 				e.x += e.vx * dt;
 				e.y += e.vy * dt;
+				if (e.age >= e.maxLife) {
+					enemies.splice(i, 1);
+					continue;
+				}
 				if (e.x < 30 || e.x > cssWidth - 30) e.vx *= -1;
 				if (e.y < 30 || e.y > cssHeight - 30) e.vy *= -1;
 				shootBullets(e, dt);
@@ -389,6 +488,7 @@
 			// Bullets
 			for (let i = bullets.length - 1; i >= 0; i--) {
 				const b = bullets[i];
+				b.age += dt;
 				b.x += b.vx * dt;
 				b.y += b.vy * dt;
 				
@@ -397,7 +497,15 @@
 					addBulletTrail(b.x, b.y, b.hue || 200);
 				}
 				
-				if (b.x < -60 || b.x > cssWidth + 60 || b.y < -60 || b.y > cssHeight + 60) { bullets.splice(i, 1); continue; }
+				// Cleanup bullets: by lifetime (8 seconds) or when offscreen
+				if (b.age >= b.maxLife) {
+					bullets.splice(i, 1);
+					continue;
+				}
+				if (b.x < -60 || b.x > cssWidth + 60 || b.y < -60 || b.y > cssHeight + 60) { 
+					bullets.splice(i, 1); 
+					continue; 
+				}
 				const dx = b.x - player.x, dy = b.y - player.y;
 				const collideR = (b.r + player.radius);
 				const dist2 = dx * dx + dy * dy;
@@ -436,13 +544,7 @@
 					continue;
 				}
 				trail.alpha = 1 - (trail.age / trail.life);
-				ctx.globalAlpha = trail.alpha;
-				ctx.fillStyle = `hsl(${trail.hue}, 90%, 60%)`;
-				ctx.beginPath();
-				ctx.arc(trail.x, trail.y, 1, 0, Math.PI * 2);
-				ctx.fill();
 			}
-			ctx.globalAlpha = 1;
 
 			// Shake decay
 			shakeTime = Math.max(0, shakeTime - dt);
@@ -527,6 +629,12 @@
 				const pulse = Math.sin(frameCount * 0.2 + e.x * 0.01) * 0.15 + 0.85;
 				const radius = e.radius * pulse;
 				
+				// Fade out effect as enemy approaches lifetime limit
+				const lifeRatio = e.age / e.maxLife;
+				const fadeAlpha = lifeRatio > 0.8 ? 1 - (lifeRatio - 0.8) * 5 : 1; // Start fading in last 20% of life
+				
+				ctx.globalAlpha = fadeAlpha;
+				
 				ctx.fillStyle = `hsl(${e.hue}, 80%, 55%)`;
 				ctx.shadowColor = `hsl(${e.hue}, 90%, 60%)`;
 				ctx.shadowBlur = 18;
@@ -534,10 +642,21 @@
 				ctx.fill();
 				
 				// Inner glow
-				ctx.globalAlpha = 0.4;
+				ctx.globalAlpha = 0.4 * fadeAlpha;
 				ctx.fillStyle = `hsl(${e.hue}, 90%, 70%)`;
 				ctx.arc(e.x, e.y, radius * 0.6, 0, Math.PI * 2);
 				ctx.fill();
+				
+				// Warning indicator when enemy is about to disappear
+				if (lifeRatio > 0.7) {
+					ctx.globalAlpha = (lifeRatio - 0.7) * 3.33; // Fade in warning
+					ctx.strokeStyle = `hsl(${e.hue}, 100%, 70%)`;
+					ctx.lineWidth = 2;
+					ctx.beginPath();
+					ctx.arc(e.x, e.y, radius + 8, 0, Math.PI * 2);
+					ctx.stroke();
+				}
+				
 				ctx.globalAlpha = 1;
 			}
 			ctx.shadowBlur = 0;
@@ -622,24 +741,64 @@
 			ctx.globalAlpha = 1;
 
 			// HUD
-			ctx.fillStyle = 'rgba(255,255,255,0.9)';
-			ctx.font = '16px system-ui, Segoe UI, Arial';
+			ctx.font = 'bold 18px system-ui, Segoe UI, Arial';
 			ctx.textAlign = 'left';
 			
-			// Enhanced HUD with subtle glow
-			ctx.shadowColor = 'rgba(0,0,0,0.8)';
-			ctx.shadowBlur = 4;
-			ctx.fillText(`Time: ${timeSurvived.toFixed(1)}s`, 12, 24);
-			ctx.fillText(`Best: ${bestTime.toFixed(1)}s`, 12, 44);
+			// Enhanced HUD with modern styling
+			const hudX = 16;
+			const hudY = 28;
+			const lineHeight = 26;
+			
+			// Time display with gradient and glow
+			ctx.shadowColor = 'rgba(0,255,255,0.8)';
+			ctx.shadowBlur = 8;
+			const timeGradient = ctx.createLinearGradient(hudX, hudY - 10, hudX + 200, hudY + 10);
+			timeGradient.addColorStop(0, '#00ffff');
+			timeGradient.addColorStop(1, '#0080ff');
+			ctx.fillStyle = timeGradient;
+			ctx.fillText(`TIME: ${timeSurvived.toFixed(1)}s`, hudX, hudY);
+			
+			// Best time with golden gradient
+			ctx.shadowColor = 'rgba(255,215,0,0.8)';
+			ctx.shadowBlur = 6;
+			const bestGradient = ctx.createLinearGradient(hudX, hudY + lineHeight - 10, hudX + 200, hudY + lineHeight + 10);
+			bestGradient.addColorStop(0, '#FFD700');
+			bestGradient.addColorStop(1, '#FFA500');
+			ctx.fillStyle = bestGradient;
+			ctx.fillText(`BEST: ${bestTime.toFixed(1)}s`, hudX, hudY + lineHeight);
+			
+			// Bullet count with red gradient
+			ctx.shadowColor = 'rgba(255,100,100,0.8)';
+			ctx.shadowBlur = 6;
+			const bulletGradient = ctx.createLinearGradient(hudX, hudY + lineHeight * 2 - 10, hudX + 200, hudY + lineHeight * 2 + 10);
+			bulletGradient.addColorStop(0, '#ff6666');
+			bulletGradient.addColorStop(1, '#cc3333');
+			ctx.fillStyle = bulletGradient;
+			ctx.fillText(`BULLETS: ${bullets.length}`, hudX, hudY + lineHeight * 2);
+			
+			// Enemy count with purple gradient
+			ctx.shadowColor = 'rgba(200,100,255,0.8)';
+			ctx.shadowBlur = 6;
+			const enemyGradient = ctx.createLinearGradient(hudX, hudY + lineHeight * 3 - 10, hudX + 200, hudY + lineHeight * 3 + 10);
+			enemyGradient.addColorStop(0, '#c864ff');
+			enemyGradient.addColorStop(1, '#8a2be2');
+			ctx.fillStyle = enemyGradient;
+			ctx.fillText(`ENEMIES: ${enemies.length}`, hudX, hudY + lineHeight * 3);
 			
 			// Highlight best time if it's a new record
 			if (timeSurvived > bestTime && timeSurvived > 0) {
-				ctx.shadowColor = 'rgba(255,215,0,0.8)';
-				ctx.shadowBlur = 8;
-				ctx.fillStyle = '#FFD700';
-				ctx.fillText(`NEW RECORD!`, 12, 64);
-				ctx.shadowBlur = 4;
-				ctx.fillStyle = 'rgba(255,255,255,0.9)';
+				ctx.shadowColor = 'rgba(255,215,0,0.9)';
+				ctx.shadowBlur = 12;
+				ctx.font = 'bold 20px system-ui, Segoe UI, Arial';
+				const newRecordGradient = ctx.createLinearGradient(hudX, hudY + lineHeight * 4 - 10, hudX + 300, hudY + lineHeight * 4 + 10);
+				newRecordGradient.addColorStop(0, '#FFD700');
+				newRecordGradient.addColorStop(0.5, '#FFA500');
+				newRecordGradient.addColorStop(1, '#FFD700');
+				ctx.fillStyle = newRecordGradient;
+				ctx.fillText(`NEW RECORD!`, hudX, hudY + lineHeight * 4);
+				
+				// Reset font for next frame
+				ctx.font = 'bold 18px system-ui, Segoe UI, Arial';
 			}
 			
 			ctx.shadowBlur = 0;
