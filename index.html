@@ -22,7 +22,16 @@
 			image-rendering: pixelated;
 		}
 
+		/* Enhanced visual effects */
+		@keyframes pulse {
+			0%, 100% { opacity: 0.8; }
+			50% { opacity: 1; }
+		}
 
+		@keyframes glow {
+			0%, 100% { filter: brightness(1); }
+			50% { filter: brightness(1.3); }
+		}
 
 		.overlay {
 			position: fixed;
@@ -186,6 +195,11 @@
 		let shakeStrength = 0;
 		const grazeMargin = 10;
 
+		// Visual enhancement variables
+		const bulletTrails = [];
+		const lightRays = [];
+		let frameCount = 0;
+
 		function rnd(min, max) { return Math.random() * (max - min) + min; }
 		function addShake(time, strength) { shakeTime = Math.max(shakeTime, time); shakeStrength = Math.max(shakeStrength, strength); }
 		function emitParticles(x, y, count, hue) {
@@ -193,6 +207,44 @@
 				particles.push({ x, y, vx: rnd(-80, 80), vy: rnd(-80, 80), r: rnd(1.5, 3.5), life: rnd(0.25, 0.6), age: 0, hue });
 			}
 		}
+
+		// Enhanced particle effects
+		function emitEnhancedParticles(x, y, count, hue, type = 'normal') {
+			for (let i = 0; i < count; i++) {
+				let particle = { 
+					x, y, 
+					vx: rnd(-80, 80), 
+					vy: rnd(-80, 80), 
+					r: rnd(1.5, 3.5), 
+					life: rnd(0.25, 0.6), 
+					age: 0, 
+					hue,
+					type: type || 'normal',
+					rotation: rnd(0, Math.PI * 2),
+					rotationSpeed: rnd(-5, 5)
+				};
+				
+				if (type === 'sparkle') {
+					particle.r = rnd(0.5, 2);
+					particle.life = rnd(0.4, 0.8);
+					particle.vx *= 0.5;
+					particle.vy *= 0.5;
+				}
+				
+				particles.push(particle);
+			}
+		}
+
+		// Bullet trail system
+		function addBulletTrail(x, y, hue) {
+			bulletTrails.push({
+				x, y, hue,
+				age: 0,
+				life: 0.15,
+				alpha: 0.8
+			});
+		}
+
 		function initStars() {
 			stars.length = 0;
 			const area = cssWidth * cssHeight;
@@ -215,6 +267,7 @@
 			enemies.length = 0;
 			bullets.length = 0;
 			particles.length = 0;
+			bulletTrails.length = 0;
 			initStars();
 			timeSurvived = 0;
 			spawnTimer = 0;
@@ -222,6 +275,7 @@
 			gameOver = false;
 			paused = false;
 			running = true;
+			frameCount = 0;
 			gameOverEl.classList.remove('show');
 			pauseOverlay.classList.remove('show');
 			lastTime = performance.now();
@@ -295,6 +349,10 @@
 				s.y += s.speed * dt;
 				if (s.y > cssHeight) { s.y = -2; s.x = Math.random() * cssWidth; s.alpha = rnd(0.3, 0.9); }
 			}
+			
+			// Frame counter for visual effects
+			frameCount++;
+			
 			// Player movement
 			let mx = 0, my = 0;
 			if (keys['arrowleft'] || keys['a']) mx -= 1;
@@ -333,6 +391,12 @@
 				const b = bullets[i];
 				b.x += b.vx * dt;
 				b.y += b.vy * dt;
+				
+				// Add bullet trail for visual effect
+				if (frameCount % 2 === 0) { // Every other frame for performance
+					addBulletTrail(b.x, b.y, b.hue || 200);
+				}
+				
 				if (b.x < -60 || b.x > cssWidth + 60 || b.y < -60 || b.y > cssHeight + 60) { bullets.splice(i, 1); continue; }
 				const dx = b.x - player.x, dy = b.y - player.y;
 				const collideR = (b.r + player.radius);
@@ -340,7 +404,7 @@
 				const grazeR = (player.radius + grazeMargin + b.r);
 				if (b.canGraze && dist2 < grazeR * grazeR && dist2 > collideR * collideR) {
 					b.canGraze = false;
-					emitParticles(b.x, b.y, 6, b.hue || 200);
+					emitEnhancedParticles(b.x, b.y, 6, b.hue || 200, 'sparkle');
 					addShake(0.08, 2.2);
 					playGraze();
 				}
@@ -354,8 +418,31 @@
 				p.x += p.vx * dt;
 				p.y += p.vy * dt;
 				p.vx *= 0.98; p.vy *= 0.98;
+				
+				// Enhanced particle rotation
+				if (p.rotation !== undefined) {
+					p.rotation += p.rotationSpeed * dt;
+				}
+				
 				if (p.age >= p.life) particles.splice(i, 1);
 			}
+
+			// Bullet trails
+			for (let i = bulletTrails.length - 1; i >= 0; i--) {
+				const trail = bulletTrails[i];
+				trail.age += dt;
+				if (trail.age > trail.life) {
+					bulletTrails.splice(i, 1);
+					continue;
+				}
+				trail.alpha = 1 - (trail.age / trail.life);
+				ctx.globalAlpha = trail.alpha;
+				ctx.fillStyle = `hsl(${trail.hue}, 90%, 60%)`;
+				ctx.beginPath();
+				ctx.arc(trail.x, trail.y, 1, 0, Math.PI * 2);
+				ctx.fill();
+			}
+			ctx.globalAlpha = 1;
 
 			// Shake decay
 			shakeTime = Math.max(0, shakeTime - dt);
@@ -374,8 +461,24 @@
 			ctx.save();
 			ctx.fillStyle = '#fff';
 			for (const s of stars) {
-				ctx.globalAlpha = s.alpha;
-				ctx.fillRect(s.x, s.y, s.size, s.size);
+				// Twinkling effect
+				const twinkle = Math.sin(frameCount * 0.1 + s.x * 0.01) * 0.3 + 0.7;
+				ctx.globalAlpha = s.alpha * twinkle;
+				
+				// Different star sizes and brightness based on layer
+				const size = s.size;
+				const brightness = s.alpha * twinkle;
+				
+				ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+				ctx.fillRect(s.x, s.y, size, size);
+				
+				// Add subtle glow for brighter stars
+				if (brightness > 0.6) {
+					ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+					ctx.shadowBlur = 2;
+					ctx.fillRect(s.x, s.y, size, size);
+					ctx.shadowBlur = 0;
+				}
 			}
 			ctx.restore();
 
@@ -396,36 +499,108 @@
 				ctx.fill();
 				ctx.strokeStyle = 'rgba(255,255,255,0.2)';
 				ctx.stroke();
+				
+				// Enhanced bullet glow
+				ctx.shadowBlur = 20;
+				ctx.globalAlpha = 0.6;
+				ctx.arc(b.x, b.y, b.r * 1.5, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.globalAlpha = 1;
 			}
 			ctx.shadowBlur = 0;
+			
+			// Bullet trails
+			for (const trail of bulletTrails) {
+				ctx.globalAlpha = trail.alpha * 0.7;
+				ctx.fillStyle = `hsl(${trail.hue}, 80%, 70%)`;
+				ctx.beginPath();
+				ctx.arc(trail.x, trail.y, 2, 0, Math.PI * 2);
+				ctx.fill();
+			}
+			ctx.globalAlpha = 1;
 
 			// Enemies as big glowing balls
 			for (const e of enemies) {
 				ctx.beginPath();
+				
+				// Pulsing effect for enemies
+				const pulse = Math.sin(frameCount * 0.2 + e.x * 0.01) * 0.15 + 0.85;
+				const radius = e.radius * pulse;
+				
 				ctx.fillStyle = `hsl(${e.hue}, 80%, 55%)`;
 				ctx.shadowColor = `hsl(${e.hue}, 90%, 60%)`;
 				ctx.shadowBlur = 18;
-				ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+				ctx.arc(e.x, e.y, radius, 0, Math.PI * 2);
 				ctx.fill();
+				
+				// Inner glow
+				ctx.globalAlpha = 0.4;
+				ctx.fillStyle = `hsl(${e.hue}, 90%, 70%)`;
+				ctx.arc(e.x, e.y, radius * 0.6, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.globalAlpha = 1;
 			}
 			ctx.shadowBlur = 0;
 
 			// Player
 			ctx.shadowColor = 'rgba(0,255,255,0.6)';
 			ctx.shadowBlur = 14;
-			ctx.drawImage(playerImg, player.x - player.w / 2, player.y - player.h / 2, player.w, player.h);
+			
+			// Subtle breathing effect
+			const breath = Math.sin(frameCount * 0.15) * 0.05 + 0.95;
+			const playerSize = player.w * breath;
+			
+			ctx.drawImage(playerImg, player.x - playerSize / 2, player.y - playerSize / 2, playerSize, playerSize);
+			
+			// Player aura effect
+			ctx.globalAlpha = 0.3;
+			ctx.strokeStyle = 'rgba(0,255,255,0.4)';
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.arc(player.x, player.y, player.radius + 8, 0, Math.PI * 2);
+			ctx.stroke();
+			ctx.globalAlpha = 1;
+			
 			ctx.shadowBlur = 0;
 
 			// Particles
 			for (const p of particles) {
 				const t = Math.min(1, p.age / p.life);
 				ctx.globalAlpha = 1 - t;
-				ctx.fillStyle = `hsl(${p.hue}, 90%, ${60 - t * 20}%)`;
-				ctx.beginPath();
-				ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-				ctx.fill();
+				
+				// Enhanced particle rendering
+				if (p.type === 'sparkle') {
+					// Sparkle particles
+					ctx.fillStyle = `hsl(${p.hue}, 90%, ${80 - t * 30}%)`;
+					ctx.shadowColor = `hsl(${p.hue}, 90%, 70%)`;
+					ctx.shadowBlur = 8;
+					
+					// Rotated diamond shape for sparkles
+					ctx.save();
+					ctx.translate(p.x, p.y);
+					if (p.rotation !== undefined) {
+						ctx.rotate(p.rotation);
+					}
+					ctx.beginPath();
+					ctx.moveTo(0, -p.r);
+					ctx.lineTo(p.r * 0.7, 0);
+					ctx.lineTo(0, p.r);
+					ctx.lineTo(-p.r * 0.7, 0);
+					ctx.closePath();
+					ctx.fill();
+					ctx.restore();
+				} else {
+					// Normal particles
+					ctx.fillStyle = `hsl(${p.hue}, 90%, ${60 - t * 20}%)`;
+					ctx.shadowColor = `hsl(${p.hue}, 90%, 65%)`;
+					ctx.shadowBlur = 4;
+					ctx.beginPath();
+					ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+					ctx.fill();
+				}
 			}
 			ctx.globalAlpha = 1;
+			ctx.shadowBlur = 0;
 
 			// Vignette
 			const g = ctx.createRadialGradient(cssWidth/2, cssHeight/2, Math.min(cssWidth, cssHeight)*0.35, cssWidth/2, cssHeight/2, Math.max(cssWidth, cssHeight)*0.75);
@@ -433,13 +608,41 @@
 			g.addColorStop(1, 'rgba(0,0,0,0.35)');
 			ctx.fillStyle = g;
 			ctx.fillRect(0, 0, cssWidth, cssHeight);
+			
+			// Subtle scanline effect
+			ctx.globalAlpha = 0.03;
+			ctx.strokeStyle = '#fff';
+			ctx.lineWidth = 1;
+			for (let y = 0; y < cssHeight; y += 4) {
+				ctx.beginPath();
+				ctx.moveTo(0, y);
+				ctx.lineTo(cssWidth, y);
+				ctx.stroke();
+			}
+			ctx.globalAlpha = 1;
 
 			// HUD
 			ctx.fillStyle = 'rgba(255,255,255,0.9)';
 			ctx.font = '16px system-ui, Segoe UI, Arial';
 			ctx.textAlign = 'left';
+			
+			// Enhanced HUD with subtle glow
+			ctx.shadowColor = 'rgba(0,0,0,0.8)';
+			ctx.shadowBlur = 4;
 			ctx.fillText(`Time: ${timeSurvived.toFixed(1)}s`, 12, 24);
 			ctx.fillText(`Best: ${bestTime.toFixed(1)}s`, 12, 44);
+			
+			// Highlight best time if it's a new record
+			if (timeSurvived > bestTime && timeSurvived > 0) {
+				ctx.shadowColor = 'rgba(255,215,0,0.8)';
+				ctx.shadowBlur = 8;
+				ctx.fillStyle = '#FFD700';
+				ctx.fillText(`NEW RECORD!`, 12, 64);
+				ctx.shadowBlur = 4;
+				ctx.fillStyle = 'rgba(255,255,255,0.9)';
+			}
+			
+			ctx.shadowBlur = 0;
 		}
 
 		function loop(t) {
